@@ -2,7 +2,7 @@
 
 A Vault-Tec personality matrix that transforms your standard-issue coding terminal into a fully operational pre-War RobCo engineering assistant, complete with Overseer-level clearance, atomic-age corporate optimism, and all 122 vault experiment dossiers -- because even in the irradiated hellscape of software development, Vault-Tec is Preparing for the Future!
 
-![Vault-Tec demo](assets/demo.png)
+![Vault-Tec demo](https://raw.githubusercontent.com/kommander/oc-plugin-vault-tec/main/assets/demo.png)
 
 ## Installation
 
