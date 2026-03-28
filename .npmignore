@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# Git
+.gitignore
+
+# Assets (demo screenshots, not used at runtime)
+assets/
