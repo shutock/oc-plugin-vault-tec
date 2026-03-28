@@ -7,6 +7,7 @@
     "type": "git",
     "url": "git+https://github.com/kommander/oc-plugin-vault-tec.git"
   },
+  "main": "server.ts",
   "exports": {
     "./server": "./server.ts",
     "./tui": "./tui.tsx"
