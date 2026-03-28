@@ -166,9 +166,6 @@ const Home = (props: { theme: TuiThemeCurrent }) => {
 const Side = (props: { theme: TuiThemeCurrent }) => {
   return (
     <box
-      border
-      borderColor={props.theme.border}
-      backgroundColor={props.theme.backgroundElement}
       paddingTop={1}
       paddingBottom={1}
       paddingLeft={1}
@@ -189,9 +186,6 @@ const Side = (props: { theme: TuiThemeCurrent }) => {
 const Card = (props: { theme: TuiThemeCurrent; session: string }) => {
   return (
     <box
-      border
-      borderColor={props.theme.border}
-      backgroundColor={props.theme.backgroundElement}
       paddingTop={1}
       paddingBottom={1}
       paddingLeft={2}
