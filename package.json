@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "oc-plugin-vault-tec",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./server.ts",
+  "exports": {
+    ".": "./server.ts",
+    "./server": "./server.ts",
+    "./tui": "./tui.tsx"
+  },
+  "engines": {
+    "opencode": ">=1.3.0"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "*",
+    "@opentui/core": "*",
+    "@opentui/solid": "*",
+    "solid-js": "*"
+  },
+  "oc-plugin": [
+    "server",
+    "tui"
+  ]
+}
