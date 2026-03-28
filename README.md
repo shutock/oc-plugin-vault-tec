@@ -16,25 +16,9 @@ Or from OpenCode commands:
 2. Select `Install Plugin`
 3. Enter `oc-plugin-vault-tec`
 
-## Config (optional)
-
-Add to `.opencode/opencode.jsonc`:
-
-```jsonc
-{
-  "plugin": [["oc-plugin-vault-tec", { "enabled": true }]],
-}
-```
-
-Add to `.opencode/tui.json`:
-
-```jsonc
-{
-  "plugin": [["oc-plugin-vault-tec", { "enabled": true }]],
-}
-```
-
 ## Options
+
+Plugin options can be configured via the `opencode.json` and `tui.json` config files.
 
 ### Server
 
