@@ -110,8 +110,8 @@
       "light": "#061506"
     },
     "diffRemovedBg": {
-      "dark": "#0D0604",
-      "light": "#0D0604"
+      "dark": "#061006",
+      "light": "#061006"
     },
     "diffContextBg": {
       "dark": "crtPanel",
@@ -126,8 +126,8 @@
       "light": "#041004"
     },
     "diffRemovedLineNumberBg": {
-      "dark": "#0A0504",
-      "light": "#0A0504"
+      "dark": "#050D05",
+      "light": "#050D05"
     },
     "markdownText": {
       "dark": "green",
