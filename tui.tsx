@@ -1,6 +1,6 @@
 // @ts-nocheck
 /** @jsxImportSource @opentui/solid */
-import { VignetteEffect } from "@opentui/core"
+import { TargetChannel, VignetteEffect } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
 import type { TuiPlugin, TuiPluginModule, TuiSlotPlugin, TuiThemeCurrent } from "@opencode-ai/plugin/tui"
 import { Show, createMemo, createSignal } from "solid-js"
@@ -280,57 +280,130 @@ const slot = (api: Api, value: () => Cfg): TuiSlotPlugin[] => {
   ]
 }
 
+const SCAN_GAIN_MATRIX = new Float32Array([
+  2,
+  0,
+  0,
+  0,
+  0,
+  2,
+  0,
+  0,
+  0,
+  0,
+  2,
+  0,
+  0,
+  0,
+  0,
+  1,
+])
+
+const SCAN_BAND_SIZES = new Int32Array([6, 8, 5])
+const SCAN_BAND_BOOSTS = new Float32Array([0.35, 0.25, 0.3])
+const SCAN_BAND_PHASES = new Float32Array([0, 0.35, 0.7])
+const SCAN_MAX_ACTIVE_ROWS = 19
+
+const createScanBandWeights = () => {
+  const count = SCAN_BAND_SIZES.length
+  const weights = new Array<Float32Array>(count)
+  for (let band = 0; band < count; band++) {
+    const size = SCAN_BAND_SIZES[band]
+    const half = size * 0.5
+    const boost = SCAN_BAND_BOOSTS[band]
+    const rowWeights = new Float32Array(size)
+    for (let i = 0; i < size; i++) {
+      const dist = Math.abs(i - half) / half
+      rowWeights[i] = (1 - dist * dist) * boost
+    }
+    weights[band] = rowWeights
+  }
+  return weights
+}
+
 const scan = (v: number, speed: number, enabled: boolean) => {
-  const vignette = new VignetteEffect(v)
+  const vignette = v > 0 ? new VignetteEffect(v) : undefined
+  const bandWeights = createScanBandWeights()
+
   let time = 0
-  return (buf: Parameters<typeof vignette.apply>[0], dt: number) => {
-    if (enabled) {
-      const w = buf.width
-      const h = buf.height
-      const fg = buf.buffers.fg
-      const bg = buf.buffers.bg
-      time += dt
+  let cachedWidth = -1
+  let cachedHeight = -1
 
-      // Multiple v-sync bands moving bottom-to-top at the same speed
-      // Each band has a different size, boost, and phase offset
-      const bands = [
-        { size: 6, boost: 0.35, phase: 0 },
-        { size: 8, boost: 0.25, phase: 0.35 },
-        { size: 5, boost: 0.3, phase: 0.7 },
-      ]
+  let rowBoost = new Float32Array(0)
+  const activeRows = new Int32Array(SCAN_MAX_ACTIVE_ROWS)
+  const rowBaseOffset = new Int32Array(SCAN_MAX_ACTIVE_ROWS)
+  let cellMask = new Float32Array(0)
 
-      // Build per-row brightness multiplier
-      const rowBoost = new Float32Array(h)
-      for (const band of bands) {
-        // All bands move upward at the same speed, offset by phase
-        const pos = (1 - (((time * speed) / h + band.phase) % 1)) * h
-        const half = band.size / 2
-        for (let i = 0; i < band.size; i++) {
-          const y = Math.floor(pos + i) % h
-          const dist = Math.abs(i - half) / half
-          rowBoost[y] += (1 - dist * dist) * band.boost
-        }
+  const ensureCache = (width: number, height: number) => {
+    if (width === cachedWidth && height === cachedHeight) return
+
+    cachedWidth = width
+    cachedHeight = height
+    rowBoost = new Float32Array(height)
+    cellMask = new Float32Array(width * SCAN_MAX_ACTIVE_ROWS * 3)
+
+    for (let row = 0; row < SCAN_MAX_ACTIVE_ROWS; row++) {
+      const base = row * width * 3
+      rowBaseOffset[row] = base
+      let idx = base
+      for (let x = 0; x < width; x++) {
+        cellMask[idx] = x
+        idx += 3
       }
+    }
+  }
 
-      // Apply per-row
-      for (let y = 0; y < h; y++) {
-        const b = rowBoost[y]
-        if (b === 0) continue
-        const mult = 1 + b
-        for (let x = 0; x < w; x++) {
-          const ci = (y * w + x) * 4
-          fg[ci] = Math.min(1, fg[ci] * mult)
-          fg[ci + 1] = Math.min(1, fg[ci + 1] * mult)
-          fg[ci + 2] = Math.min(1, fg[ci + 2] * mult)
-          bg[ci] = Math.min(1, bg[ci] * mult)
-          bg[ci + 1] = Math.min(1, bg[ci + 1] * mult)
-          bg[ci + 2] = Math.min(1, bg[ci + 2] * mult)
+  return (buf: Parameters<VignetteEffect["apply"]>[0], dt: number) => {
+    if (enabled) {
+      const width = buf.width
+      const height = buf.height
+
+      if (width > 0 && height > 0) {
+        ensureCache(width, height)
+        rowBoost.fill(0)
+
+        time += dt
+        const basePhase = (time * speed) / height
+
+        for (let band = 0; band < SCAN_BAND_SIZES.length; band++) {
+          const size = SCAN_BAND_SIZES[band]
+          const weights = bandWeights[band]
+
+          let phase = basePhase + SCAN_BAND_PHASES[band]
+          phase -= Math.floor(phase)
+          const start = Math.floor((1 - phase) * height)
+
+          for (let i = 0; i < size; i++) {
+            let y = start + i
+            if (y >= height) y %= height
+            rowBoost[y] += weights[i]
+          }
         }
+
+        let rowCount = 0
+        for (let y = 0; y < height; y++) {
+          if (rowBoost[y] <= 0) continue
+          activeRows[rowCount++] = y
+        }
+
+        for (let row = 0; row < SCAN_MAX_ACTIVE_ROWS; row++) {
+          const y = row < rowCount ? activeRows[row] : 0
+          const strength = row < rowCount ? rowBoost[y] : 0
+          let idx = rowBaseOffset[row] + 1
+          for (let x = 0; x < width; x++) {
+            cellMask[idx] = y
+            cellMask[idx + 1] = strength
+            idx += 3
+          }
+        }
+
+        buf.colorMatrix(SCAN_GAIN_MATRIX, cellMask, 1.0, TargetChannel.Both)
       }
     }
 
-    // Vignette
-    vignette.apply(buf)
+    if (vignette) {
+      vignette.apply(buf)
+    }
   }
 }
 
