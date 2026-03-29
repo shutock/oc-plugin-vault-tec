@@ -422,50 +422,52 @@ const slot = (api: Api, value: () => Cfg): TuiSlotPlugin[] => {
   ]
 }
 
-const scan = (v: number, speed: number) => {
+const scan = (v: number, speed: number, enabled: boolean) => {
   const vignette = new VignetteEffect(v)
   let time = 0
   return (buf: Parameters<typeof vignette.apply>[0], dt: number) => {
-    const w = buf.width
-    const h = buf.height
-    const fg = buf.buffers.fg
-    const bg = buf.buffers.bg
-    time += dt
+    if (enabled) {
+      const w = buf.width
+      const h = buf.height
+      const fg = buf.buffers.fg
+      const bg = buf.buffers.bg
+      time += dt
 
-    // Multiple v-sync bands moving bottom-to-top at the same speed
-    // Each band has a different size, boost, and phase offset
-    const bands = [
-      { size: 6, boost: 0.35, phase: 0 },
-      { size: 8, boost: 0.25, phase: 0.35 },
-      { size: 5, boost: 0.3, phase: 0.7 },
-    ]
+      // Multiple v-sync bands moving bottom-to-top at the same speed
+      // Each band has a different size, boost, and phase offset
+      const bands = [
+        { size: 6, boost: 0.35, phase: 0 },
+        { size: 8, boost: 0.25, phase: 0.35 },
+        { size: 5, boost: 0.3, phase: 0.7 },
+      ]
 
-    // Build per-row brightness multiplier
-    const rowBoost = new Float32Array(h)
-    for (const band of bands) {
-      // All bands move upward at the same speed, offset by phase
-      const pos = (1 - (((time * speed) / h + band.phase) % 1)) * h
-      const half = band.size / 2
-      for (let i = 0; i < band.size; i++) {
-        const y = Math.floor(pos + i) % h
-        const dist = Math.abs(i - half) / half
-        rowBoost[y] += (1 - dist * dist) * band.boost
+      // Build per-row brightness multiplier
+      const rowBoost = new Float32Array(h)
+      for (const band of bands) {
+        // All bands move upward at the same speed, offset by phase
+        const pos = (1 - (((time * speed) / h + band.phase) % 1)) * h
+        const half = band.size / 2
+        for (let i = 0; i < band.size; i++) {
+          const y = Math.floor(pos + i) % h
+          const dist = Math.abs(i - half) / half
+          rowBoost[y] += (1 - dist * dist) * band.boost
+        }
       }
-    }
 
-    // Apply per-row
-    for (let y = 0; y < h; y++) {
-      const b = rowBoost[y]
-      if (b === 0) continue
-      const mult = 1 + b
-      for (let x = 0; x < w; x++) {
-        const ci = (y * w + x) * 4
-        fg[ci] = Math.min(1, fg[ci] * mult)
-        fg[ci + 1] = Math.min(1, fg[ci + 1] * mult)
-        fg[ci + 2] = Math.min(1, fg[ci + 2] * mult)
-        bg[ci] = Math.min(1, bg[ci] * mult)
-        bg[ci + 1] = Math.min(1, bg[ci + 1] * mult)
-        bg[ci + 2] = Math.min(1, bg[ci + 2] * mult)
+      // Apply per-row
+      for (let y = 0; y < h; y++) {
+        const b = rowBoost[y]
+        if (b === 0) continue
+        const mult = 1 + b
+        for (let x = 0; x < w; x++) {
+          const ci = (y * w + x) * 4
+          fg[ci] = Math.min(1, fg[ci] * mult)
+          fg[ci + 1] = Math.min(1, fg[ci + 1] * mult)
+          fg[ci + 2] = Math.min(1, fg[ci + 2] * mult)
+          bg[ci] = Math.min(1, bg[ci] * mult)
+          bg[ci + 1] = Math.min(1, bg[ci + 1] * mult)
+          bg[ci + 2] = Math.min(1, bg[ci + 2] * mult)
+        }
       }
     }
 
@@ -527,7 +529,8 @@ const tui: TuiPlugin = async (api, options) => {
     }
 
     const state = value()
-    if (!state.scan) {
+    const hasVignette = state.vignette > 0
+    if (!state.scan && !hasVignette) {
       if (live) {
         api.renderer.dropLive()
         live = false
@@ -535,11 +538,17 @@ const tui: TuiPlugin = async (api, options) => {
       return
     }
 
-    post = scan(state.vignette, state.scanSpeed)
+    post = scan(state.vignette, state.scanSpeed, state.scan)
     api.renderer.addPostProcessFn(post)
-    if (!live) {
+
+    if (state.scan && !live) {
       api.renderer.requestLive()
       live = true
+    }
+
+    if (!state.scan && live) {
+      api.renderer.dropLive()
+      live = false
     }
   }
 
