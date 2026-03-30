@@ -7,13 +7,12 @@
     "type": "git",
     "url": "git+https://github.com/kommander/oc-plugin-vault-tec.git"
   },
-  "main": "server.ts",
   "exports": {
     "./server": "./server.ts",
     "./tui": "./tui.tsx"
   },
   "engines": {
-    "opencode": ">=1.3.4"
+    "opencode": ">=1.3.7"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": "*",
