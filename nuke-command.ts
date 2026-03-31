@@ -116,8 +116,9 @@ const STEM_START_ROW = 0.66
 const TORUS_CENTER_ROW = 0.36
 const TORUS_HALF_WIDTH = 0.18
 
-const BRAILLE_SHADE_RAMP = new Uint32Array([0x2801, 0x2803, 0x2807, 0x280f, 0x281f, 0x283f, 0x287f, 0x28ff])
-const SHADE_LAST = BRAILLE_SHADE_RAMP.length - 1
+const BRAILLE_RAMP_DOWN = new Uint32Array([0x2801, 0x2809, 0x280b, 0x281b, 0x281f, 0x283f, 0x287f, 0x28ff])
+const BRAILLE_RAMP_UP = new Uint32Array([0x2840, 0x28c0, 0x28c4, 0x28e4, 0x28e6, 0x28f6, 0x28f7, 0x28ff])
+const SHADE_LAST = BRAILLE_RAMP_DOWN.length - 1
 
 const BRAILLE_DOT_COUNT = new Uint8Array(256)
 for (let bits = 0; bits < BRAILLE_DOT_COUNT.length; bits++) {
@@ -269,7 +270,8 @@ const createNukePostProcess = (onDone: () => void) => {
       const density = clamp01(glyph.baseDensity * 0.72 + 0.18 + motion * 0.24)
       const shadeIndex = Math.min(SHADE_LAST, Math.max(0, Math.round(density * SHADE_LAST)))
 
-      chars[index] = glyph.isBraille ? BRAILLE_SHADE_RAMP[shadeIndex] : glyph.codePoint
+      const ramp = glyph.stemWeight > 0 ? BRAILLE_RAMP_UP : BRAILLE_RAMP_DOWN
+      chars[index] = glyph.isBraille ? ramp[shadeIndex] : glyph.codePoint
       attrs[index] = 0
 
       const flicker = motion * 0.08 + torusSpin * glyph.torusWeight * 0.12 + stemRise * glyph.stemWeight * 0.06
