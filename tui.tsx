@@ -13,6 +13,7 @@ import {
   type SettingsState,
   type ToggleField,
 } from "./settings-dialog"
+import { PipBoyContext } from "./context"
 import { Side } from "./side"
 import { Tips } from "./tips"
 
@@ -246,6 +247,17 @@ const slot = (api: Api, value: () => Cfg): TuiSlotPlugin[] => {
       },
     },
     {
+      slots: {
+        sidebar_footer(ctx, input) {
+          return (
+            <Show when={value().sidebar}>
+              <PipBoyContext theme={ctx.theme.current} api={api} sessionId={input.session_id} />
+            </Show>
+          )
+        },
+      },
+    },
+    {
       order: 100,
       slots: {
         home_bottom(ctx) {
@@ -430,6 +442,37 @@ const tui: TuiPlugin = async (api, options) => {
     tips = false
   }
 
+  let contextPluginId: string | undefined
+  const disableContext = async () => {
+    if (contextPluginId) return
+    const item = api.plugins
+      .list()
+      .find((entry) => entry.id.startsWith("internal:") && entry.id.includes("context"))
+    if (!item?.enabled || !item.active) return
+    const ok = await api.plugins.deactivate(item.id)
+    if (!ok) {
+      api.ui.toast({
+        variant: "warning",
+        message: "Pip-Boy context enabled, but default context display could not be disabled.",
+      })
+      return
+    }
+    contextPluginId = item.id
+  }
+
+  const restoreContext = async () => {
+    if (!contextPluginId) return
+    const ok = await api.plugins.activate(contextPluginId)
+    if (!ok) {
+      api.ui.toast({
+        variant: "warning",
+        message: "Failed to restore default context display.",
+      })
+      return
+    }
+    contextPluginId = undefined
+  }
+
   const write = (key: Field, next: unknown) => {
     api.kv.set(settingKey[key], next)
   }
@@ -484,6 +527,14 @@ const tui: TuiPlugin = async (api, options) => {
       applyScan()
     }
 
+    if (key === "sidebar") {
+      if (state.sidebar) {
+        void disableContext()
+      } else {
+        void restoreContext()
+      }
+    }
+
     if (key === "tips") {
       if (state.tips) {
         void disableTips()
@@ -514,6 +565,9 @@ const tui: TuiPlugin = async (api, options) => {
   if (value().tips) {
     await disableTips()
   }
+  if (value().sidebar) {
+    await disableContext()
+  }
   applyScan()
 
   api.command.register(() => [
@@ -541,6 +595,7 @@ const tui: TuiPlugin = async (api, options) => {
 
   api.lifecycle.onDispose(async () => {
     await restoreTips()
+    await restoreContext()
     if (post) {
       api.renderer.removePostProcessFn(post)
     }
