@@ -121,13 +121,6 @@ type LogoGlyph = {
   codePoint: number
 }
 
-type SmokeGlyph = {
-  x: number
-  y: number
-  proximity: number
-  phase: number
-}
-
 const CLOUD_TOP = {
   r: 0.2,
   g: 1,
@@ -143,8 +136,6 @@ const CLOUD_BOTTOM = {
 const STEM_START_ROW = 0.66
 const TORUS_CENTER_ROW = 0.36
 const TORUS_HALF_WIDTH = 0.18
-const SMOKE_MARGIN = 4
-
 const BRAILLE_RAMP_DOWN = new Uint32Array([0x2801, 0x2809, 0x280b, 0x281b, 0x281f, 0x283f, 0x287f, 0x28ff])
 const BRAILLE_RAMP_UP = new Uint32Array([0x2840, 0x28c0, 0x28c4, 0x28e4, 0x28e6, 0x28f6, 0x28f7, 0x28ff])
 const SHADE_LAST = BRAILLE_RAMP_DOWN.length - 1
@@ -203,7 +194,6 @@ const createNukePostProcess = (onDone: () => void) => {
   let logoLayoutWidth = -1
   let logoLayoutHeight = -1
   let logoGlyphs: LogoGlyph[] = []
-  let smokeGlyphs: SmokeGlyph[] = []
 
   const ensureFullMask = (width: number, height: number) => {
     if (width === fullMaskWidth && height === fullMaskHeight) return
@@ -351,8 +341,6 @@ const createNukePostProcess = (onDone: () => void) => {
     logoLayoutHeight = height
 
     const nextLogo: LogoGlyph[] = []
-    const nextSmoke: SmokeGlyph[] = []
-    const occupied = new Set<number>()
 
     const startX = Math.floor((width - logoWidth) * 0.5)
     const startY = Math.floor((height - logoRows.length) * 0.5)
@@ -367,29 +355,10 @@ const createNukePostProcess = (onDone: () => void) => {
         const codePoint = line[col]
         if (!isCloudInk(codePoint)) continue
         nextLogo.push({ x, y, codePoint })
-        occupied.add(y * width + x)
-      }
-    }
-
-    const smokeLeft = Math.max(0, startX - SMOKE_MARGIN)
-    const smokeRight = Math.min(width - 1, startX + logoWidth - 1 + SMOKE_MARGIN)
-    const smokeTop = Math.max(0, startY - SMOKE_MARGIN)
-    const smokeBottom = Math.min(height - 1, startY + logoRows.length - 1 + SMOKE_MARGIN)
-
-    for (let y = smokeTop; y <= smokeBottom; y++) {
-      for (let x = smokeLeft; x <= smokeRight; x++) {
-        if (occupied.has(y * width + x)) continue
-        const dx = Math.max(0, startX - x, x - (startX + logoWidth - 1))
-        const dy = Math.max(0, startY - y, y - (startY + logoRows.length - 1))
-        const dist = Math.max(dx, dy)
-        if (dist > SMOKE_MARGIN) continue
-        const proximity = clamp01(1 - Math.max(dist, 1) / (SMOKE_MARGIN + 1))
-        nextSmoke.push({ x, y, proximity, phase: phaseFromXY(x, y) })
       }
     }
 
     logoGlyphs = nextLogo
-    smokeGlyphs = nextSmoke
   }
 
   const drawLogo = (buf: any, reveal: number) => {
@@ -397,39 +366,17 @@ const createNukePostProcess = (onDone: () => void) => {
     const chars = buf.buffers.char
     const attrs = buf.buffers.attributes
     const fg = buf.buffers.fg
-    const time = elapsed * 0.001
 
-    for (let i = 0; i < smokeGlyphs.length; i++) {
-      const s = smokeGlyphs[i]
-      const index = s.y * width + s.x
+    for (let i = 0; i < logoGlyphs.length; i++) {
+      const g = logoGlyphs[i]
+      const index = g.y * width + g.x
       const colorIndex = index * 4
-      const wave = Math.sin(time * 2.5 + s.phase) * 0.3
-                 + Math.sin(time * 1.3 - s.phase * 0.7) * 0.2
-      const density = clamp01(s.proximity * 0.4 + wave * s.proximity * 0.35) * reveal
-      const shadeIndex = Math.min(SHADE_LAST, Math.max(0, Math.round(density * SHADE_LAST)))
-
-      if (shadeIndex > 0) {
-        chars[index] = BRAILLE_RAMP_UP[shadeIndex]
-        attrs[index] = 0
-        fg[colorIndex] = 0.08 * reveal
-        fg[colorIndex + 1] = 0.35 * reveal
-        fg[colorIndex + 2] = 0.08 * reveal
-        fg[colorIndex + 3] = 1
-      }
-    }
-
-    if (reveal > 0.08) {
-      for (let i = 0; i < logoGlyphs.length; i++) {
-        const g = logoGlyphs[i]
-        const index = g.y * width + g.x
-        const colorIndex = index * 4
-        chars[index] = g.codePoint
-        attrs[index] = 0
-        fg[colorIndex] = 0.25 * reveal
-        fg[colorIndex + 1] = 1.0 * reveal
-        fg[colorIndex + 2] = 0.25 * reveal
-        fg[colorIndex + 3] = 1
-      }
+      chars[index] = g.codePoint
+      attrs[index] = 0
+      fg[colorIndex] = 0.25 * reveal
+      fg[colorIndex + 1] = 1.0 * reveal
+      fg[colorIndex + 2] = 0.25 * reveal
+      fg[colorIndex + 3] = 1
     }
   }
 
