@@ -56,43 +56,38 @@ export const PipBoyContext = (props: { theme: TuiThemeCurrent; api: Api; session
     let totalOutput = 0
     let totalCacheRead = 0
     let totalCost = 0
-    let latestInput = 0
-    let latestOutput = 0
-    let latestCacheRead = 0
     let lastModelID = ""
     let lastProviderID = ""
+    let lastMsg = null
 
     for (const [idx, msg] of messages.entries()) {
       if (msg.role !== "assistant") continue
-      const input = toNumber(msg.tokens.input)
-      const output = toNumber(msg.tokens.output)
-      const cacheRead = toNumber(msg.tokens.cache.read)
-      const cost = toNumber(msg.cost)
 
-      logContext("message", {
-        idx,
-        id: msg.id,
-        role: msg.role,
-        providerID: msg.providerID,
-        modelID: msg.modelID,
-        input,
-        output,
-        cacheRead,
-        cost,
+      // Track the latest valid message for model info and cumulative totals
+      if (msg.providerID && msg.modelID && (msg.tokens.input > 0 || msg.tokens.output > 0)) {
+        lastMsg = msg
+        lastModelID = msg.modelID
+        lastProviderID = msg.providerID
+      }
+    }
+
+    // Use cumulative totals from the latest message (includes full context window)
+    if (lastMsg) {
+      totalInput = toNumber(lastMsg.tokens.total) || toNumber(lastMsg.tokens.input)
+      totalOutput = toNumber(lastMsg.tokens.output)
+      totalCacheRead = toNumber(lastMsg.tokens.cache?.read)
+      totalCost = toNumber(lastMsg.cost)
+
+      logContext("latestMessage", {
+        id: lastMsg.id,
+        providerID: lastMsg.providerID,
+        modelID: lastMsg.modelID,
+        tokens: lastMsg.tokens,
+        totalInput,
+        totalOutput,
+        totalCacheRead,
+        totalCost,
       })
-
-      totalInput += input
-      totalOutput += output
-      totalCacheRead += cacheRead
-      totalCost += cost
-
-      if (!msg.providerID || !msg.modelID) continue
-      if (input <= 0 && output <= 0) continue
-      latestInput = input
-      latestOutput = output
-      latestCacheRead = cacheRead
-      lastModelID = msg.modelID
-      lastProviderID = msg.providerID
     }
 
     let contextLimit = 0
@@ -130,14 +125,11 @@ export const PipBoyContext = (props: { theme: TuiThemeCurrent; api: Api; session
       }
     }
 
-    const contextRatio = contextLimit > 0 ? Math.min(1, latestInput / contextLimit) : 0
-    const outputRatio = outputLimit > 0 ? Math.min(1, latestOutput / outputLimit) : 0
-    const cacheRatio = latestInput > 0 ? Math.min(1, latestCacheRead / latestInput) : 0
+    const contextRatio = contextLimit > 0 ? Math.min(1, totalInput / contextLimit) : 0
+    const outputRatio = outputLimit > 0 ? Math.min(1, totalOutput / outputLimit) : 0
+    const cacheRatio = totalInput > 0 ? Math.min(1, totalCacheRead / totalInput) : 0
 
     logContext("recompute:summary", {
-      latestInput,
-      latestOutput,
-      latestCacheRead,
       totalInput,
       totalOutput,
       totalCacheRead,
@@ -153,11 +145,9 @@ export const PipBoyContext = (props: { theme: TuiThemeCurrent; api: Api; session
     })
 
     return {
-      latestInput,
-      latestOutput,
-      latestCacheRead,
       totalInput,
       totalOutput,
+      totalCacheRead,
       totalCost,
       contextLimit,
       outputLimit,
@@ -175,9 +165,9 @@ export const PipBoyContext = (props: { theme: TuiThemeCurrent; api: Api; session
     return props.theme.primary
   })
 
-  const ctxInfo = createMemo(() => `${fmt(data().latestInput)} / ${fmt(data().contextLimit)} tokens`)
+  const ctxInfo = createMemo(() => `${fmt(data().totalInput)} / ${fmt(data().contextLimit)} tokens`)
   const ctxPct = createMemo(() => ` ${pct(data().contextRatio)}`)
-  const outInfo = createMemo(() => `${fmt(data().latestOutput)} / ${fmt(data().outputLimit)} tokens`)
+  const outInfo = createMemo(() => `${fmt(data().totalOutput)} / ${fmt(data().outputLimit)} tokens`)
   const outPct = createMemo(() => ` ${pct(data().outputRatio)}`)
   const cachePct = createMemo(() => ` ${pct(data().cacheRatio)}`)
 
