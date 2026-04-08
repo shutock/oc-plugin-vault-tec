@@ -58,6 +58,7 @@ export const PipBoyContext = (props: { theme: TuiThemeCurrent; api: Api; session
     let totalCost = 0
     let latestInput = 0
     let latestOutput = 0
+    let latestCacheRead = 0
     let lastModelID = ""
     let lastProviderID = ""
 
@@ -89,6 +90,7 @@ export const PipBoyContext = (props: { theme: TuiThemeCurrent; api: Api; session
       if (input <= 0 && output <= 0) continue
       latestInput = input
       latestOutput = output
+      latestCacheRead = cacheRead
       lastModelID = msg.modelID
       lastProviderID = msg.providerID
     }
@@ -128,13 +130,14 @@ export const PipBoyContext = (props: { theme: TuiThemeCurrent; api: Api; session
       }
     }
 
-    const contextRatio = contextLimit > 0 ? Math.min(1, totalInput / contextLimit) : 0
-    const outputRatio = outputLimit > 0 ? Math.min(1, totalOutput / outputLimit) : 0
-    const cacheRatio = totalInput > 0 ? Math.min(1, totalCacheRead / totalInput) : 0
+    const contextRatio = contextLimit > 0 ? Math.min(1, latestInput / contextLimit) : 0
+    const outputRatio = outputLimit > 0 ? Math.min(1, latestOutput / outputLimit) : 0
+    const cacheRatio = latestInput > 0 ? Math.min(1, latestCacheRead / latestInput) : 0
 
     logContext("recompute:summary", {
       latestInput,
       latestOutput,
+      latestCacheRead,
       totalInput,
       totalOutput,
       totalCacheRead,
@@ -152,6 +155,7 @@ export const PipBoyContext = (props: { theme: TuiThemeCurrent; api: Api; session
     return {
       latestInput,
       latestOutput,
+      latestCacheRead,
       totalInput,
       totalOutput,
       totalCost,
@@ -171,9 +175,9 @@ export const PipBoyContext = (props: { theme: TuiThemeCurrent; api: Api; session
     return props.theme.primary
   })
 
-  const ctxInfo = createMemo(() => `${fmt(data().totalInput)} / ${fmt(data().contextLimit)} tokens`)
+  const ctxInfo = createMemo(() => `${fmt(data().latestInput)} / ${fmt(data().contextLimit)} tokens`)
   const ctxPct = createMemo(() => ` ${pct(data().contextRatio)}`)
-  const outInfo = createMemo(() => `${fmt(data().totalOutput)} / ${fmt(data().outputLimit)} tokens`)
+  const outInfo = createMemo(() => `${fmt(data().latestOutput)} / ${fmt(data().outputLimit)} tokens`)
   const outPct = createMemo(() => ` ${pct(data().outputRatio)}`)
   const cachePct = createMemo(() => ` ${pct(data().cacheRatio)}`)
 
